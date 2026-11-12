@@ -1,0 +1,11 @@
+/.bundle
+/log/*
+!/log/.keep
+/tmp/*
+!/tmp/.keep
+/tmp/pids/*
+!/tmp/pids/
+!/tmp/pids/.keep
+
+# The lockfile depends on VC_VERSION.
+/Gemfile.lock

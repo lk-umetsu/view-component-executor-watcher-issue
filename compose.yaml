@@ -1,0 +1,13 @@
+services:
+  app:
+    build: .
+    volumes:
+      # The bind mount from the host is the slow filesystem.
+      - .:/app
+      - bundle:/bundle
+    environment:
+      - VC_VERSION=${VC_VERSION:-4.23.0}
+    command: bin/benchmark
+
+volumes:
+  bundle:
