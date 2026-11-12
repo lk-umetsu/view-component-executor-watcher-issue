@@ -1,16 +1,11 @@
 # frozen_string_literal: true
 
 # Run with: bin/rails runner script/executor_benchmark.rb
-#
-# 1. Measures an empty `executor.wrap`. The block is empty, so the time is the
-#    cost of the executor hooks. New threads are used because the runner's main
-#    thread is already inside the executor.
-# 2. Posts jobs to Action Cable's worker pool, the same way a stream handler
-#    does for every broadcast message (`worker_pool.async_invoke`). Action Cable
-#    wraps each job in the executor.
 
-ActionView::Base # load Action View so view_component registers its executor hook
+# Load Action View so view_component registers its executor hook.
+ActionView::Base
 
+# Count how many times a file watcher checks the files for changes.
 checks = Concurrent::AtomicFixnum.new
 ActiveSupport::FileUpdateChecker.prepend(Module.new do
   define_method(:execute_if_updated) do |*args, &block|
@@ -19,50 +14,26 @@ ActiveSupport::FileUpdateChecker.prepend(Module.new do
   end
 end)
 
-def now
-  Process.clock_gettime(Process::CLOCK_MONOTONIC)
-end
-
-def measure_executor(threads:, runs:)
-  times = Array.new(threads) do
-    Thread.new do
-      Array.new(runs) do
-        started = now
-        Rails.application.executor.wrap { }
-        now - started
-      end
-    end
-  end.flat_map(&:value)
-
-  times.sum / times.size * 1000
-end
-
-puts "view_component #{ViewComponent::VERSION::STRING}"
-puts
-
-runs = 20
-single = measure_executor(threads: 1, runs: runs)
-four = measure_executor(threads: 4, runs: runs)
-
-puts "Empty executor.wrap"
-puts "  executor runs: #{runs + 4 * runs}"
-puts "  FileUpdateChecker#execute_if_updated calls: #{checks.value}"
-puts "  1 thread:  %.2fms per run" % single
-puts "  4 threads: %.2fms per run" % four
-puts
-
-checks.value = 0
+# Post 50 jobs to Action Cable's worker pool and measure the time until all of
+# them have finished. This is what Action Cable does for every broadcast
+# message: a stream handler posts a job with `worker_pool.async_invoke`, and
+# the worker pool wraps the job in the executor before running it. That is
+# where view_component checks the templates.
+#
+# A real job transmits the message to the browser. The job here only counts
+# down a latch, so the measured time is the cost of the executor hooks.
 jobs = 50
 done = Concurrent::CountDownLatch.new(jobs)
-handler = ->(_message) { done.count_down } # stands in for transmitting to the browser
+handler = ->(_message) { done.count_down }
 worker_pool = ActionCable.server.worker_pool
 
-started = now
+started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 jobs.times { |i| worker_pool.async_invoke(handler, :call, "chunk #{i}", connection: nil) }
 done.wait
-elapsed = now - started
+elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
 
+puts "view_component #{ViewComponent::VERSION::STRING}"
 puts "Action Cable worker pool (#{ActionCable.server.config.worker_pool_size} threads)"
 puts "  jobs: #{jobs}"
 puts "  FileUpdateChecker#execute_if_updated calls: #{checks.value}"
-puts "  total: %.2fs" % elapsed
+puts "  total: %.1fms" % (elapsed * 1000)
