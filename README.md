@@ -22,7 +22,7 @@ Each run does the following (`bin/benchmark`):
 1. Installs the gems for the given view_component version.
 2. Runs `script/executor_benchmark.rb`. It posts 50 jobs to Action Cable's worker pool with `worker_pool.async_invoke` and measures the total time. This is [what a stream handler does for every broadcast message](https://github.com/rails/rails/blob/3f290b759c8e2ffe7c257951b1255740751355e4/actioncable/lib/action_cable/channel/streams.rb#L163-L169), and [Action Cable wraps each job in the executor](https://github.com/rails/rails/blob/3f290b759c8e2ffe7c257951b1255740751355e4/actioncable/lib/action_cable/engine.rb#L74-L84). The jobs do nothing, so no browser or WebSocket is needed, and the time is the cost of the executor hooks.
 
-To look like a mid-sized app, the repository contains 250 components (`.rb` and `.html.erb`) under `app/components/generated` and 500 models under `app/models/generated`. They were created with `ruby script/generate_files.rb`. To try other sizes, run it again with `COMPONENTS` and `MODELS`.
+To look like a mid-sized app, the repository contains 250 components (`.rb` and `.html.erb`) under `app/components/generated` and 500 models under `app/models/generated`. The models aren't templates, but the watcher's glob still has to traverse their directories: without them, the total for 4.23.0 below drops from about 1578ms to about 648ms. The files were created with `ruby script/generate_files.rb`. To try other sizes, run it again with `COMPONENTS` and `MODELS`.
 
 ## Results
 
